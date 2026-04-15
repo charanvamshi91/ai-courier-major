@@ -2,6 +2,14 @@
 
 This project is a lightweight Python web application for managing courier operations with an AI-style dispatch assistant.
 
+## Live Demo
+
+Deployed on Render:
+
+```text
+https://ai-courier-major.onrender.com
+```
+
 ## Features
 
 - Courier registration and fleet utilization tracking
@@ -23,27 +31,18 @@ Then open:
 http://127.0.0.1:8000
 ```
 
-## Free hosting options
+## Deployment
 
-Because this is a Python web app, use a free hosting subdomain instead of a static-site host:
+This project is currently deployed on Render using the included `render.yaml` blueprint.
 
-- Render: `your-app.onrender.com`
-- PythonAnywhere: `your-username.pythonanywhere.com`
-
-## Easiest option: Render
-
-1. Upload this project to GitHub.
-2. Create a new Web Service on Render and connect your repo.
-3. Use these settings:
+Render configuration:
 
 ```text
 Build Command: pip install -r requirements.txt
 Start Command: python app.py
 ```
 
-4. Render will provide a free `onrender.com` subdomain.
-
-This app now reads the deployment port from the `PORT` environment variable, which is required for most hosting platforms.
+The app reads the deployment port from the `PORT` environment variable and binds to a public host for compatibility with hosting platforms like Render.
 
 ## Tech stack
 
