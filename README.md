@@ -10,6 +10,10 @@ Deployed on Render:
 https://ai-courier-major.onrender.com
 ```
 
+## Demo Notice
+
+The public Render deployment is a demo environment. It uses temporary hosted storage with the local SQLite file, so courier and shipment data may reset after redeploys, service restarts, or platform filesystem cleanup.
+
 ## Features
 
 - Courier registration and fleet utilization tracking
@@ -43,6 +47,8 @@ Start Command: python app.py
 ```
 
 The app reads the deployment port from the `PORT` environment variable and binds to a public host for compatibility with hosting platforms like Render.
+
+Because the current deployment uses SQLite on Render's ephemeral filesystem, it should be treated as a demonstration build rather than permanent production storage.
 
 ## Tech stack
 
