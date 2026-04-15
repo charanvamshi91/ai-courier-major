@@ -1,1 +1,1 @@
-# No external Python packages are required for this app.
+psycopg[binary]==3.2.9

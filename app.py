@@ -7,75 +7,186 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import psycopg
+from psycopg.rows import dict_row
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "courier_ai.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
+COURIER_SEED = [
+    ("Riya Express", "Kolkata Hub", "Bike", "Available", 12, 4),
+    ("Arjun Logistics", "Delhi Hub", "Van", "Available", 40, 18),
+    ("Meera Fleet", "Mumbai Hub", "Truck", "On Route", 120, 85),
+    ("Kabir Courier", "Bengaluru Hub", "Bike", "Available", 10, 3),
+]
+
+SHIPMENT_SEED = [
+    (
+        "AICMS-1001",
+        "Nexus Pharma",
+        "City Hospital",
+        "Kolkata",
+        "Howrah",
+        5.5,
+        18,
+        "High",
+        "Picked Up",
+        1,
+    ),
+    (
+        "AICMS-1002",
+        "TechZone",
+        "Retail Point",
+        "Delhi",
+        "Noida",
+        14.0,
+        26,
+        "Medium",
+        "In Transit",
+        2,
+    ),
+    (
+        "AICMS-1003",
+        "Fresh Farm",
+        "Central Market",
+        "Mumbai",
+        "Navi Mumbai",
+        35.0,
+        34,
+        "Critical",
+        "Awaiting Dispatch",
+        None,
+    ),
+]
+
 
 def get_connection():
+    if DATABASE_URL:
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def using_postgres():
+    return bool(DATABASE_URL)
+
+
+def adapt_query(query):
+    return query.replace("?", "%s") if using_postgres() else query
+
+
+def execute(cursor, query, params=()):
+    return cursor.execute(adapt_query(query), params)
+
+
+def executemany(cursor, query, params_seq):
+    return cursor.executemany(adapt_query(query), params_seq)
+
+
+def fetch_scalar(cursor, query, params=()):
+    execute(cursor, query, params)
+    row = cursor.fetchone()
+    if isinstance(row, dict):
+        return next(iter(row.values()))
+    return row[0]
 
 
 def initialize_database():
     connection = get_connection()
     cursor = connection.cursor()
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS couriers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            hub TEXT NOT NULL,
-            vehicle_type TEXT NOT NULL,
-            status TEXT NOT NULL,
-            capacity INTEGER NOT NULL,
-            current_load INTEGER NOT NULL DEFAULT 0
+    if using_postgres():
+        execute(
+            cursor,
+            """
+            CREATE TABLE IF NOT EXISTS couriers (
+                id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                name TEXT NOT NULL,
+                hub TEXT NOT NULL,
+                vehicle_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                capacity INTEGER NOT NULL,
+                current_load INTEGER NOT NULL DEFAULT 0
+            )
+            """,
         )
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS shipments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tracking_id TEXT NOT NULL UNIQUE,
-            sender_name TEXT NOT NULL,
-            receiver_name TEXT NOT NULL,
-            origin TEXT NOT NULL,
-            destination TEXT NOT NULL,
-            package_weight REAL NOT NULL,
-            distance_km REAL NOT NULL,
-            priority TEXT NOT NULL,
-            status TEXT NOT NULL,
-            assigned_courier_id INTEGER,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (assigned_courier_id) REFERENCES couriers (id)
+        execute(
+            cursor,
+            """
+            CREATE TABLE IF NOT EXISTS shipments (
+                id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                tracking_id TEXT NOT NULL UNIQUE,
+                sender_name TEXT NOT NULL,
+                receiver_name TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                destination TEXT NOT NULL,
+                package_weight DOUBLE PRECISION NOT NULL,
+                distance_km DOUBLE PRECISION NOT NULL,
+                priority TEXT NOT NULL,
+                status TEXT NOT NULL,
+                assigned_courier_id INTEGER,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (assigned_courier_id) REFERENCES couriers (id)
+            )
+            """,
         )
-        """
-    )
+    else:
+        execute(
+            cursor,
+            """
+            CREATE TABLE IF NOT EXISTS couriers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                hub TEXT NOT NULL,
+                vehicle_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                capacity INTEGER NOT NULL,
+                current_load INTEGER NOT NULL DEFAULT 0
+            )
+            """,
+        )
+        execute(
+            cursor,
+            """
+            CREATE TABLE IF NOT EXISTS shipments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tracking_id TEXT NOT NULL UNIQUE,
+                sender_name TEXT NOT NULL,
+                receiver_name TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                destination TEXT NOT NULL,
+                package_weight REAL NOT NULL,
+                distance_km REAL NOT NULL,
+                priority TEXT NOT NULL,
+                status TEXT NOT NULL,
+                assigned_courier_id INTEGER,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (assigned_courier_id) REFERENCES couriers (id)
+            )
+            """,
+        )
 
     connection.commit()
 
-    if cursor.execute("SELECT COUNT(*) FROM couriers").fetchone()[0] == 0:
-        cursor.executemany(
+    if fetch_scalar(cursor, "SELECT COUNT(*) AS total FROM couriers") == 0:
+        executemany(
+            cursor,
             """
             INSERT INTO couriers (name, hub, vehicle_type, status, capacity, current_load)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            [
-                ("Riya Express", "Kolkata Hub", "Bike", "Available", 12, 4),
-                ("Arjun Logistics", "Delhi Hub", "Van", "Available", 40, 18),
-                ("Meera Fleet", "Mumbai Hub", "Truck", "On Route", 120, 85),
-                ("Kabir Courier", "Bengaluru Hub", "Bike", "Available", 10, 3),
-            ],
+            COURIER_SEED,
         )
 
-    if cursor.execute("SELECT COUNT(*) FROM shipments").fetchone()[0] == 0:
-        cursor.executemany(
+    if fetch_scalar(cursor, "SELECT COUNT(*) AS total FROM shipments") == 0:
+        executemany(
+            cursor,
             """
             INSERT INTO shipments (
                 tracking_id, sender_name, receiver_name, origin, destination,
@@ -84,45 +195,8 @@ def initialize_database():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (
-                    "AICMS-1001",
-                    "Nexus Pharma",
-                    "City Hospital",
-                    "Kolkata",
-                    "Howrah",
-                    5.5,
-                    18,
-                    "High",
-                    "Picked Up",
-                    1,
-                    datetime.now().isoformat(timespec="seconds"),
-                ),
-                (
-                    "AICMS-1002",
-                    "TechZone",
-                    "Retail Point",
-                    "Delhi",
-                    "Noida",
-                    14.0,
-                    26,
-                    "Medium",
-                    "In Transit",
-                    2,
-                    datetime.now().isoformat(timespec="seconds"),
-                ),
-                (
-                    "AICMS-1003",
-                    "Fresh Farm",
-                    "Central Market",
-                    "Mumbai",
-                    "Navi Mumbai",
-                    35.0,
-                    34,
-                    "Critical",
-                    "Awaiting Dispatch",
-                    None,
-                    datetime.now().isoformat(timespec="seconds"),
-                ),
+                (*shipment, datetime.now().isoformat(timespec="seconds"))
+                for shipment in SHIPMENT_SEED
             ],
         )
 
@@ -135,30 +209,34 @@ def fetch_dashboard_data():
     cursor = connection.cursor()
 
     summary = {
-        "total_shipments": cursor.execute("SELECT COUNT(*) FROM shipments").fetchone()[0],
-        "active_shipments": cursor.execute(
-            "SELECT COUNT(*) FROM shipments WHERE status IN ('Picked Up', 'In Transit', 'Awaiting Dispatch')"
-        ).fetchone()[0],
-        "available_couriers": cursor.execute(
-            "SELECT COUNT(*) FROM couriers WHERE status = 'Available'"
-        ).fetchone()[0],
-        "critical_shipments": cursor.execute(
-            "SELECT COUNT(*) FROM shipments WHERE priority = 'Critical'"
-        ).fetchone()[0],
+        "total_shipments": fetch_scalar(cursor, "SELECT COUNT(*) AS total FROM shipments"),
+        "active_shipments": fetch_scalar(
+            cursor,
+            "SELECT COUNT(*) AS total FROM shipments WHERE status IN ('Picked Up', 'In Transit', 'Awaiting Dispatch')",
+        ),
+        "available_couriers": fetch_scalar(
+            cursor,
+            "SELECT COUNT(*) AS total FROM couriers WHERE status = 'Available'",
+        ),
+        "critical_shipments": fetch_scalar(
+            cursor,
+            "SELECT COUNT(*) AS total FROM shipments WHERE priority = 'Critical'",
+        ),
     }
 
-    shipments = cursor.execute(
+    execute(
+        cursor,
         """
         SELECT shipments.*, couriers.name AS courier_name
         FROM shipments
         LEFT JOIN couriers ON shipments.assigned_courier_id = couriers.id
         ORDER BY shipments.id DESC
         """
-    ).fetchall()
+    )
+    shipments = cursor.fetchall()
 
-    couriers = cursor.execute(
-        "SELECT * FROM couriers ORDER BY status ASC, current_load ASC, name ASC"
-    ).fetchall()
+    execute(cursor, "SELECT * FROM couriers ORDER BY status ASC, current_load ASC, name ASC")
+    couriers = cursor.fetchall()
 
     connection.close()
     return summary, shipments, couriers
@@ -187,10 +265,13 @@ def generate_ai_recommendations():
     connection = get_connection()
     cursor = connection.cursor()
 
-    pending_shipments = cursor.execute(
-        "SELECT * FROM shipments WHERE assigned_courier_id IS NULL ORDER BY created_at ASC"
-    ).fetchall()
-    couriers = cursor.execute("SELECT * FROM couriers").fetchall()
+    execute(
+        cursor,
+        "SELECT * FROM shipments WHERE assigned_courier_id IS NULL ORDER BY created_at ASC",
+    )
+    pending_shipments = cursor.fetchall()
+    execute(cursor, "SELECT * FROM couriers")
+    couriers = cursor.fetchall()
 
     recommendations = []
     for shipment in pending_shipments:
@@ -229,7 +310,8 @@ def generate_ai_recommendations():
 def add_courier(payload):
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute(
+    execute(
+        cursor,
         """
         INSERT INTO couriers (name, hub, vehicle_type, status, capacity, current_load)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -250,8 +332,9 @@ def add_courier(payload):
 def add_shipment(payload):
     connection = get_connection()
     cursor = connection.cursor()
-    tracking_id = f"AICMS-{1000 + cursor.execute('SELECT COUNT(*) FROM shipments').fetchone()[0] + 1}"
-    cursor.execute(
+    tracking_id = f"AICMS-{1000 + fetch_scalar(cursor, 'SELECT COUNT(*) AS total FROM shipments') + 1}"
+    execute(
+        cursor,
         """
         INSERT INTO shipments (
             tracking_id, sender_name, receiver_name, origin, destination,
@@ -279,16 +362,15 @@ def add_shipment(payload):
 def assign_shipment(payload):
     connection = get_connection()
     cursor = connection.cursor()
-
-    shipment = cursor.execute(
-        "SELECT package_weight FROM shipments WHERE id = ?", (int(payload["shipment_id"]),)
-    ).fetchone()
+    execute(cursor, "SELECT package_weight FROM shipments WHERE id = ?", (int(payload["shipment_id"]),))
+    shipment = cursor.fetchone()
 
     if not shipment:
         connection.close()
         return
 
-    cursor.execute(
+    execute(
+        cursor,
         """
         UPDATE shipments
         SET assigned_courier_id = ?, status = 'Picked Up'
@@ -296,8 +378,8 @@ def assign_shipment(payload):
         """,
         (int(payload["courier_id"]), int(payload["shipment_id"])),
     )
-
-    cursor.execute(
+    execute(
+        cursor,
         """
         UPDATE couriers
         SET current_load = current_load + ?
@@ -313,7 +395,8 @@ def assign_shipment(payload):
 def update_shipment_status(payload):
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute(
+    execute(
+        cursor,
         "UPDATE shipments SET status = ? WHERE id = ?",
         (payload["status"], int(payload["shipment_id"])),
     )

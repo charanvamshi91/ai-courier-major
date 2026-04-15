@@ -12,7 +12,7 @@ https://ai-courier-major.onrender.com
 
 ## Demo Notice
 
-The public Render deployment is a demo environment. It uses temporary hosted storage with the local SQLite file, so courier and shipment data may reset after redeploys, service restarts, or platform filesystem cleanup.
+The current public Render deployment is still a demo environment until a Neon Postgres `DATABASE_URL` is added in Render. Without that variable, the app falls back to local SQLite storage and courier/shipment data may reset after redeploys, service restarts, or platform filesystem cleanup.
 
 ## Features
 
@@ -37,7 +37,7 @@ http://127.0.0.1:8000
 
 ## Deployment
 
-This project is currently deployed on Render using the included `render.yaml` blueprint.
+This project is deployed on Render using the included `render.yaml` blueprint and is now prepared for Neon Postgres.
 
 Render configuration:
 
@@ -46,14 +46,28 @@ Build Command: pip install -r requirements.txt
 Start Command: python app.py
 ```
 
-The app reads the deployment port from the `PORT` environment variable and binds to a public host for compatibility with hosting platforms like Render.
+Environment variables:
 
-Because the current deployment uses SQLite on Render's ephemeral filesystem, it should be treated as a demonstration build rather than permanent production storage.
+```text
+DATABASE_URL=<your Neon connection string>
+PYTHON_VERSION=3.11.4
+```
+
+The app reads the deployment port from the `PORT` environment variable, binds to a public host for Render, and uses Neon Postgres automatically whenever `DATABASE_URL` is present.
+
+## Neon Setup
+
+1. Create a Postgres project in Neon.
+2. Copy the connection string from Neon.
+3. In Render, open your web service settings and add `DATABASE_URL`.
+4. Redeploy the service.
+5. After redeploy, the app will use persistent Postgres storage instead of temporary SQLite demo data.
 
 ## Tech stack
 
 - Python 3.11
-- SQLite
+- SQLite for local fallback
+- Neon Postgres for persistent live deployment
 - Built-in `http.server`
 - HTML and CSS dashboard UI
 
