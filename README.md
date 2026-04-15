@@ -10,17 +10,13 @@ Deployed on Render:
 https://ai-courier-major.onrender.com
 ```
 
-## Demo Notice
-
-The current public Render deployment is still a demo environment until a Neon Postgres `DATABASE_URL` is added in Render. Without that variable, the app falls back to local SQLite storage and courier/shipment data may reset after redeploys, service restarts, or platform filesystem cleanup.
-
 ## Features
 
 - Courier registration and fleet utilization tracking
 - Shipment creation with priority, distance, and package weight
 - AI recommendation engine for courier assignment
 - Shipment status updates from dispatch to delivery
-- SQLite storage with seeded demo data
+- Persistent Neon Postgres deployment
 - JSON API endpoint at `/api/recommendations`
 
 ## Run the project
@@ -37,7 +33,7 @@ http://127.0.0.1:8000
 
 ## Deployment
 
-This project is deployed on Render using the included `render.yaml` blueprint and is now prepared for Neon Postgres.
+This project is deployed on Render using the included `render.yaml` blueprint and uses Neon Postgres for persistent hosted data.
 
 Render configuration:
 
@@ -53,7 +49,7 @@ DATABASE_URL=<your Neon connection string>
 PYTHON_VERSION=3.11.4
 ```
 
-The app reads the deployment port from the `PORT` environment variable, binds to a public host for Render, and uses Neon Postgres automatically whenever `DATABASE_URL` is present.
+The app reads the deployment port from the `PORT` environment variable, binds to a public host for Render, and uses Neon Postgres through `DATABASE_URL` in production.
 
 ## Neon Setup
 
@@ -61,7 +57,7 @@ The app reads the deployment port from the `PORT` environment variable, binds to
 2. Copy the connection string from Neon.
 3. In Render, open your web service settings and add `DATABASE_URL`.
 4. Redeploy the service.
-5. After redeploy, the app will use persistent Postgres storage instead of temporary SQLite demo data.
+5. After redeploy, the app will use persistent Postgres storage in Neon.
 
 ## Tech stack
 

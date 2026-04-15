@@ -662,15 +662,6 @@ def render_template():
                 color: var(--muted);
                 font-size: 0.92rem;
             }}
-            .demo-banner {{
-                margin-top: 18px;
-                background: rgba(180, 35, 24, 0.08);
-                border: 1px solid rgba(180, 35, 24, 0.18);
-                color: #7a1f17;
-                padding: 14px 16px;
-                border-radius: 18px;
-                line-height: 1.5;
-            }}
             @media (max-width: 960px) {{
                 .section-layout {{
                     grid-template-columns: 1fr;
@@ -687,10 +678,6 @@ def render_template():
                     Monitor couriers, track shipments, and use a lightweight AI scoring engine to match urgent
                     deliveries with the best available fleet capacity in real time.
                 </p>
-                <div class="demo-banner">
-                    Demo deployment notice: this hosted version uses temporary Render storage. Data may reset after
-                    redeploys, restarts, or platform cleanup.
-                </div>
             </section>
 
             <section class="grid metrics">
