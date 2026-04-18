@@ -7,10 +7,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import psycopg
-from psycopg.rows import dict_row
-
-
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "courier_ai.db"
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
@@ -66,6 +62,15 @@ SHIPMENT_SEED = [
 
 def get_connection():
     if DATABASE_URL:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Postgres mode needs psycopg. Install it with: "
+                "python -m pip install -r requirements.txt"
+            ) from exc
+
         return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
     connection = sqlite3.connect(DB_PATH)
@@ -867,7 +872,8 @@ class CourierManagementHandler(BaseHTTPRequestHandler):
 def run():
     initialize_database()
     server = HTTPServer((HOST, PORT), CourierManagementHandler)
-    print(f"AI Courier Management System running at http://{HOST}:{PORT}")
+    browser_host = "127.0.0.1" if HOST == "0.0.0.0" else HOST
+    print(f"AI Courier Management System running at http://{browser_host}:{PORT}")
     server.serve_forever()
 
 
